@@ -1,0 +1,159 @@
+# Instruksjoner
+
+Denne oppgaven skal løses interaktivt i RStudio ved å legge inn egen kode og kommentarer.
+Det ferdige dokumentet lagres med kandidatnummeret som navn `[kandidatnummer]_SOK1004_C5_H22.qmd` og lastes opp på deres GitHub-side.
+Hvis du har kandidatnummer 43, så vil filen hete `43_SOK1004_C5_H22.qmd`.
+Påse at koden kjører og at dere kan eksportere besvarelsen til pdf.
+Lever så lenken til GitHub-repositoriumet i Canvas.
+
+# Bakgrunn, læringsmål
+
+I [seminar 3, oppgave 3](https://uit-sok-1004-h22.github.io/seminar/s3.html) leste dere [kapittel 1 i NOU 2015:1](https://uit-sok-1004-h22.github.io/seminar/NOU%202015_%201%20kap%201%20(prod1).pdf) "Produktivitet - grunnlag for vekst og velferd." I denne oppgaven skal vi oppdatere tall brukt i analysen.
+Gjennom arbeidet vil dere repetere de grunnleggende ferdighetene i bruk av API, `tidyverse` og `ggplot` som vi har arbeidet med gjennom kurset.
+Dere vil også få anledning til å reflektere rundt sammenhengene i nasjonalregnskapet og å grave litt i statistikkbanken hos SSB.
+
+# Last inn pakker
+
+```{r}
+# output | false
+rm(list=ls()) 
+library(tidyverse)
+library(rjstat)
+library(httr)
+library(stringr)
+```
+
+# Oppgave I: Timeverksproduktivitet i markedsrettede fastlandsnæringer
+
+Reproduser en oppdatert versjon av Figur 1.1 "Timeverksproduktivitet, markedsrettede fastlandsnæringer" i rapporten.
+Her er produktivitet målt som bruttoprodukt i markedsrettet produksjon i Fastlands-Norge per timeverk, utenom bolig.
+
+## Oppgave Ia
+
+**Hvorfor trekker Produktivitetskommisjon fra produksjonen av boligtjenester, offentlig etterspørsel, og inntekter fra olje og gass når de beregner produktivitet?**
+
+*I følge produktivitetskommisjonen er det ikke forutsetning for meningsfulle beregninger innen disse næringene.*
+
+*De trekker fra boligtjenester og offentlig etterspørsel da produksjonen fra disse hovedsakelig ikke omsettes på et marked, dermed kan ikke produksjonsverdien baseres på faktiske tall og man må ty til antagelser. De fleste boliger er selveide, og har dermed ikke noen omsetning ( de generer kostnader), men det kan ikke direkte brukes for å anslå produksjonsverdi. Offentlige tjenesters produksjonsverdi forsøkes dokumentert, men dette er heller ikke basert på faktiske tall.*
+
+*Olje og gass ekskluderes for bedre internasjonal sammenlignbarhet, og fordi produktiviteten i næringen ikke alltid følger fastlands-norge og kan ha en for stor (og dermed gi feil inntrykk) effekt på produktivitetsutregningen for Norge.*
+
+## Oppgave Ib
+
+Skriv kode som bruker en JSON-spørring til å lage en oppdatert versjon av figuren, med observasjoner fra 1996 til 2021.
+Beregn gjennomsnittlig årlig endring for perioden 1996 - 2005 og, 2005-2013, og 2006 - 2021.
+**Står konklusjonen i rapporten seg?**
+
+*Den Norske økonomi har endret seg og den store veksten vi så frem til 2005 har ikke blitt opprettholdt. Rapporten beskriver hvordan den gjennomsnittelige veksten 1996-2005 ville betydd en mye større økning i norsk BNP i forhold til det vi ser i dag. Derimot viste vekstgjennomsnittet i perioden 2006-2013 den nye trenden som har blitt opprettholdt til i dag.*
+
+*Dermed mener jeg at konklusjonen står.*
+
+**Merknad.** Det er tidvis store revisjoner i nasjonalregnskapet.
+Du må regne med at individuelle tall på årlig endring kan avvike en god del, opp til et halvt prosentpoeng, mens de gjennomsnittlige veksttallene burde avvike noe mindre.
+
+**Tips:** Du henter data på timeverk og bruttoprodukt fra henholdsvis tabell 09174 og 09170.
+
+```{r}
+#JSON for "Bruttoprodukt per utførte timeverk"
+url <- "https://data.ssb.no/api/v0/no/table/09174/"
+
+query <- '{
+  "query": [
+    {
+      "code": "NACE",
+      "selection": {
+        "filter": "vs:NRNaeringPubAgg",
+        "values": [
+          "nr23fn"
+        ]
+      }
+    },
+    {
+      "code": "ContentsCode",
+      "selection": {
+        "filter": "item",
+        "values": [
+          "BruttoprodTimev"
+        ]
+      }
+    },
+    {
+      "code": "Tid",
+      "selection": {
+        "filter": "item",
+        "values": [
+          "1996",
+          "1997",
+          "1998",
+          "1999",
+          "2000",
+          "2001",
+          "2002",
+          "2003",
+          "2004",
+          "2005",
+          "2006",
+          "2007",
+          "2008",
+          "2009",
+          "2010",
+          "2011",
+          "2012",
+          "2013",
+          "2014",
+          "2015",
+          "2016",
+          "2017",
+          "2018",
+          "2019",
+          "2020",
+          "2021"
+        ]
+      }
+    }
+  ],
+  "response": {
+    "format": "json-stat2"
+  }
+}'
+
+hent_indeks.tmp <- url %>%
+  POST(body = query, encode = "json")
+
+df2 <-  hent_indeks.tmp %>%
+  content("text") %>%
+  fromJSONstat() %>%
+  as_tibble()
+
+```
+
+```{r}
+#Finner gjennomsnittet av de forskjellige årlige endringene
+gj_år_1 <- df2 %>% 
+  filter (år %in% c(1996 : 2005)) %>% 
+  summarize(value = mean(value))
+gj_år_2 <- df2 %>% 
+  filter (år %in% c(2006 : 2013)) %>% 
+  summarize(value = mean(value))
+gj_år_3 <- df2 %>% 
+  filter (år %in% c(2006 : 2021)) %>% 
+  summarize(value = mean(value))
+
+# Lager et plott i samme stil som det i NOU 2015:1
+ggplot(df2, aes(x=år, y=value)) + 
+  scale_y_continuous(breaks = c(seq(-3, 5, by = 1)))+
+  scale_x_discrete(breaks = seq(1996, 2021, by = 2))+
+  geom_bar(stat = "identity", fill = "dodgerblue3")+
+  labs(title="Timeverksproduktivitet, markedsrettede fastlandsnæringer", x = NULL, y = NULL)+
+  
+  #linjer
+  annotate("segment", x = 1, xend = 10, y = gj_år_1$value, yend = gj_år_1$value)+
+  annotate("segment", x = 11, xend = 17, y = gj_år_2$value	, yend = gj_år_2$value)+
+  annotate("segment", x = 11, xend = 26, y = gj_år_3$value	, yend = gj_år_3$value, color = "red")+
+  
+  #tekst til linjer
+  annotate("text", x = 4, y = gj_år_1$value + 0.2, label = str_glue({gj_år_1$value}, "pst."), color = "black")+
+  annotate("text", x = 14, y = gj_år_2$value + 0.2	, label =  "1,075pst.", color = "black")+
+  annotate("text", x = 21, y = gj_år_3$value + 0.2, label = "1,03pst.", color = "red")+
+  theme_linedraw()
+```
